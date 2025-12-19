@@ -1,0 +1,244 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: rainbond-platform-health
+  namespace: rbd-system
+  labels:
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+  - name: rainbond_platform_p0
+    interval: 30s
+    rules:
+    # P0 - 致命级别告警
+
+    - alert: RainbondDatabaseDown
+      expr: mysql_up == 0
+      for: 1m
+      labels:
+        severity: critical
+        level: P0
+        component: database
+      annotations:
+        summary: "Rainbond 数据库不可用"
+        description: "数据库实例 {{ $labels.instance }} 连接失败，持续时间超过 1 分钟。"
+
+    - alert: RainbondKubernetesAPIServerDown
+      expr: kubernetes_apiserver_up == 0
+      for: 1m
+      labels:
+        severity: critical
+        level: P0
+        component: kubernetes
+      annotations:
+        summary: "Kubernetes API Server 不可用"
+        description: "无法连接到 Kubernetes API Server，平台核心功能不可用。"
+
+    - alert: RainbondCoreDNSDown
+      expr: coredns_up == 0
+      for: 2m
+      labels:
+        severity: critical
+        level: P0
+        component: coredns
+      annotations:
+        summary: "CoreDNS 服务异常"
+        description: "集群内部 DNS 解析服务不可用，持续时间超过 2 分钟。"
+
+    - alert: RainbondEtcdDown
+      expr: etcd_up == 0
+      for: 1m
+      labels:
+        severity: critical
+        level: P0
+        component: etcd
+      annotations:
+        summary: "Etcd 集群不可用"
+        description: "Kubernetes 存储后端 Etcd 不可用，平台将无法正常工作。"
+
+    - alert: RainbondStorageClassUnavailable
+      expr: cluster_storage_up == 0
+      for: 5m
+      labels:
+        severity: critical
+        level: P0
+        component: storage
+      annotations:
+        summary: "存储类不可用"
+        description: "存储类 {{ $labels.storage_class }} 不可用，无法创建 PVC。"
+
+    - alert: RainbondRegistryDown
+      expr: registry_up == 0
+      for: 2m
+      labels:
+        severity: critical
+        level: P0
+        component: registry
+      annotations:
+        summary: "镜像仓库不可用"
+        description: "镜像仓库 {{ $labels.instance }} 连接失败，持续时间超过 2 分钟。"
+
+    - alert: RainbondMinIODown
+      expr: minio_up == 0
+      for: 2m
+      labels:
+        severity: critical
+        level: P0
+        component: minio
+      annotations:
+        summary: "对象存储不可用"
+        description: "MinIO/S3 对象存储服务不可用，持续时间超过 2 分钟。"
+
+  - name: rainbond_platform_p1
+    interval: 30s
+    rules:
+    # P1 - 严重级别告警
+
+    - alert: RainbondDiskSpaceCritical
+      expr: disk_space_usage_percent > 90
+      for: 5m
+      labels:
+        severity: warning
+        level: P1
+        component: disk
+      annotations:
+        summary: "磁盘空间严重不足"
+        description: "路径 {{ $labels.path }} 在节点 {{ $labels.node }} 上的磁盘使用率为 {{ $value | humanizePercentage }}，已超过 90%。"
+
+    - alert: RainbondDiskSpaceWarning
+      expr: disk_space_usage_percent > 80 and disk_space_usage_percent <= 90
+      for: 10m
+      labels:
+        severity: warning
+        level: P1
+        component: disk
+      annotations:
+        summary: "磁盘空间不足"
+        description: "路径 {{ $labels.path }} 在节点 {{ $labels.node }} 上的磁盘使用率为 {{ $value | humanizePercentage }}，已超过 80%。"
+
+    - alert: RainbondGRDataDiskFull
+      expr: disk_space_usage_percent{path="/grdata"} > 90
+      for: 5m
+      labels:
+        severity: warning
+        level: P1
+        component: disk
+      annotations:
+        summary: "/grdata 目录空间严重不足"
+        description: "/grdata 目录在节点 {{ $labels.node }} 上的使用率为 {{ $value | humanizePercentage }}，构建和日志功能可能受影响。"
+
+    - alert: RainbondClusterMemoryLow
+      expr: cluster_memory_available_percent < 10
+      for: 5m
+      labels:
+        severity: warning
+        level: P1
+        component: cluster
+      annotations:
+        summary: "集群内存即将耗尽"
+        description: "集群可用内存仅剩 {{ $value | humanizePercentage }}，即将无法调度新的 Pod。"
+
+    - alert: RainbondClusterMemoryWarning
+      expr: cluster_memory_available_percent < 20 and cluster_memory_available_percent >= 10
+      for: 10m
+      labels:
+        severity: warning
+        level: P1
+        component: cluster
+      annotations:
+        summary: "集群内存资源紧张"
+        description: "集群可用内存为 {{ $value | humanizePercentage }}，建议关注资源使用情况。"
+
+    - alert: RainbondClusterCPULow
+      expr: cluster_cpu_available_percent < 10
+      for: 5m
+      labels:
+        severity: warning
+        level: P1
+        component: cluster
+      annotations:
+        summary: "集群 CPU 即将耗尽"
+        description: "集群可用 CPU 仅剩 {{ $value | humanizePercentage }}，即将无法调度新的 Pod。"
+
+    - alert: RainbondClusterCPUWarning
+      expr: cluster_cpu_available_percent < 20 and cluster_cpu_available_percent >= 10
+      for: 10m
+      labels:
+        severity: warning
+        level: P1
+        component: cluster
+      annotations:
+        summary: "集群 CPU 资源紧张"
+        description: "集群可用 CPU 为 {{ $value | humanizePercentage }}，建议关注资源使用情况。"
+
+    - alert: RainbondNodeNotReady
+      expr: node_ready == 0
+      for: 2m
+      labels:
+        severity: warning
+        level: P1
+        component: node
+      annotations:
+        summary: "节点不可用"
+        description: "节点 {{ $labels.node }} 状态为 NotReady，持续时间超过 2 分钟。"
+
+    - alert: RainbondNodeHighLoad
+      expr: node_high_load == 1
+      for: 10m
+      labels:
+        severity: warning
+        level: P1
+        component: node
+      annotations:
+        summary: "节点负载过高"
+        description: "节点 {{ $labels.node }} 负载过高（CPU > 80% 或 内存 > 80%），持续时间超过 10 分钟。"
+
+    - alert: RainbondNodeCPUHigh
+      expr: node_cpu_usage_percent > 80
+      for: 10m
+      labels:
+        severity: warning
+        level: P1
+        component: node
+      annotations:
+        summary: "节点 CPU 使用率过高"
+        description: "节点 {{ $labels.node }} CPU 使用率为 {{ $value | humanizePercentage }}，持续时间超过 10 分钟。"
+
+    - alert: RainbondNodeMemoryHigh
+      expr: node_memory_usage_percent > 80
+      for: 10m
+      labels:
+        severity: warning
+        level: P1
+        component: node
+      annotations:
+        summary: "节点内存使用率过高"
+        description: "节点 {{ $labels.node }} 内存使用率为 {{ $value | humanizePercentage }}，持续时间超过 10 分钟。"
+
+  - name: rainbond_platform_errors
+    interval: 30s
+    rules:
+    # 健康检查错误率监控
+
+    - alert: RainbondHealthCheckErrorsHigh
+      expr: rate(health_check_errors_total[5m]) > 0.1
+      for: 5m
+      labels:
+        severity: warning
+        level: P1
+        component: health-check
+      annotations:
+        summary: "健康检查错误率过高"
+        description: "Collector {{ $labels.collector }} 的错误率为 {{ $value | humanize }} 错误/秒，错误类型：{{ $labels.error_type }}。"
+
+    - alert: RainbondHealthCheckSlow
+      expr: histogram_quantile(0.95, rate(health_check_duration_seconds_bucket[5m])) > 10
+      for: 5m
+      labels:
+        severity: info
+        level: P1
+        component: health-check
+      annotations:
+        summary: "健康检查耗时过长"
+        description: "Collector {{ $labels.collector }} 的 P95 耗时为 {{ $value | humanizeDuration }}，可能存在性能问题。"

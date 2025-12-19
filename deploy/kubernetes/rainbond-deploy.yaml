@@ -1,0 +1,204 @@
+---
+# ConfigMap for Health Console
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: health-console-config
+  namespace: rbd-system
+  labels:
+    belongTo: rainbond-operator
+    creator: Rainbond
+    name: health-console
+data:
+  METRICS_PORT: "9090"
+  COLLECT_INTERVAL: "30s"
+  GRDATA_PATH: "/grdata"
+  NODE_CPU_THRESHOLD: "80"
+  NODE_MEMORY_THRESHOLD: "80"
+  IN_CLUSTER: "true"
+
+---
+# Secret for Health Console
+# 请根据实际情况修改密码和配置
+apiVersion: v1
+kind: Secret
+metadata:
+  name: health-console-secrets
+  namespace: rbd-system
+  labels:
+    belongTo: rainbond-operator
+    creator: Rainbond
+    name: health-console
+type: Opaque
+stringData:
+  # 数据库配置 - 使用 Rainbond 的数据库
+  # 数据库 1 - region 库
+  DB_1_NAME: "rbd-db-region"
+  DB_1_HOST: "rbd-db-rw"
+  DB_1_PORT: "3306"
+  DB_1_USER: "root"
+  DB_1_PASSWORD: "21ce5b9f"  # 请修改为实际密码
+  DB_1_DATABASE: "region"
+
+  # 数据库 2 - console 库
+  DB_2_NAME: "rbd-db-console"
+  DB_2_HOST: "rbd-db-rw"
+  DB_2_PORT: "3306"
+  DB_2_USER: "root"
+  DB_2_PASSWORD: "21ce5b9f"  # 请修改为实际密码
+  DB_2_DATABASE: "console"
+
+  # 镜像仓库配置 - 使用 Rainbond 的镜像仓库
+  REGISTRY_1_NAME: "rbd-registry"
+  REGISTRY_1_URL: "rbd-hub:5000"  # 或者使用实际的 registry 地址
+  REGISTRY_1_USER: "admin"
+  REGISTRY_1_PASSWORD: "admin1234"  # 请修改为实际密码
+  REGISTRY_1_INSECURE: "true"
+
+  # MinIO 配置 - 如果不需要可以删除
+  MINIO_ENDPOINT: "minio-service:9000"  # 请修改为实际地址
+  MINIO_ACCESS_KEY: "admin"
+  MINIO_SECRET_KEY: "admin1234"
+  MINIO_USE_SSL: "false"
+
+---
+# Deployment for Health Console
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: health-console
+  namespace: rbd-system
+  labels:
+    belongTo: rainbond-operator
+    creator: Rainbond
+    name: health-console
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      belongTo: rainbond-operator
+      creator: Rainbond
+      name: health-console
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        belongTo: rainbond-operator
+        creator: Rainbond
+        name: health-console
+      name: health-console
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
+    spec:
+      # 使用 Rainbond 的 ServiceAccount，这样可以访问集群资源
+      serviceAccount: rainbond-operator
+      serviceAccountName: rainbond-operator
+
+      containers:
+      - name: health-console
+        # 请替换为实际的镜像地址
+        image: registry.cn-hangzhou.aliyuncs.com/zhangqihang/rainbond-health-console:121902
+        imagePullPolicy: IfNotPresent
+
+        ports:
+        - containerPort: 9090
+          name: metrics
+          protocol: TCP
+
+        # 环境变量配置
+        env:
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: status.podIP
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.namespace
+
+        # 从 ConfigMap 加载配置
+        envFrom:
+        - configMapRef:
+            name: health-console-config
+        - secretRef:
+            name: health-console-secrets
+
+        # 资源限制
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+
+        # 存活探针
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 9090
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+          successThreshold: 1
+
+        # 就绪探针
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 9090
+            scheme: HTTP
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+          successThreshold: 1
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+
+---
+# Service for Health Console
+apiVersion: v1
+kind: Service
+metadata:
+  name: health-console
+  namespace: rbd-system
+  labels:
+    belongTo: rainbond-operator
+    creator: Rainbond
+    name: health-console
+spec:
+  type: ClusterIP
+  ports:
+  - port: 9090
+    targetPort: 9090
+    protocol: TCP
+    name: metrics
+  selector:
+    belongTo: rainbond-operator
+    creator: Rainbond
+    name: health-console
+
