@@ -10,8 +10,8 @@ import (
 // Config holds all configuration for the health check service
 type Config struct {
 	// Service configuration
-	MetricsPort      int
-	CollectInterval  time.Duration
+	MetricsPort     int
+	CollectInterval time.Duration
 
 	// Database configurations (support multiple instances)
 	Databases []DatabaseConfig
@@ -21,13 +21,6 @@ type Config struct {
 
 	// MinIO configuration
 	MinIO MinIOConfig
-
-	// Disk monitoring
-	GRDataPath string
-
-	// Node load thresholds
-	NodeCPUThreshold    float64
-	NodeMemoryThreshold float64
 
 	// Kubernetes in-cluster mode
 	InCluster bool
@@ -63,12 +56,9 @@ type MinIOConfig struct {
 // LoadConfig loads configuration from environment variables
 func LoadConfig() *Config {
 	cfg := &Config{
-		MetricsPort:         getEnvAsInt("METRICS_PORT", 9090),
-		CollectInterval:     getEnvAsDuration("COLLECT_INTERVAL", 30*time.Second),
-		GRDataPath:          getEnv("GRDATA_PATH", "/grdata"),
-		NodeCPUThreshold:    getEnvAsFloat("NODE_CPU_THRESHOLD", 80.0),
-		NodeMemoryThreshold: getEnvAsFloat("NODE_MEMORY_THRESHOLD", 80.0),
-		InCluster:           getEnvAsBool("IN_CLUSTER", true),
+		MetricsPort:     getEnvAsInt("METRICS_PORT", 9090),
+		CollectInterval: getEnvAsDuration("COLLECT_INTERVAL", 30*time.Second),
+		InCluster:       getEnvAsBool("IN_CLUSTER", true),
 	}
 
 	// Load database configurations
@@ -159,15 +149,6 @@ func getEnvAsInt(key string, defaultValue int) int {
 	if value := os.Getenv(key); value != "" {
 		if intValue, err := strconv.Atoi(value); err == nil {
 			return intValue
-		}
-	}
-	return defaultValue
-}
-
-func getEnvAsFloat(key string, defaultValue float64) float64 {
-	if value := os.Getenv(key); value != "" {
-		if floatValue, err := strconv.ParseFloat(value, 64); err == nil {
-			return floatValue
 		}
 	}
 	return defaultValue

@@ -23,7 +23,6 @@ func main() {
 	log.Printf("Configuration loaded:")
 	log.Printf("  - Metrics Port: %d", cfg.MetricsPort)
 	log.Printf("  - Collect Interval: %s", cfg.CollectInterval)
-	log.Printf("  - GRData Path: %s", cfg.GRDataPath)
 	log.Printf("  - Database Instances: %d", len(cfg.Databases))
 	log.Printf("  - Registry Instances: %d", len(cfg.Registries))
 
