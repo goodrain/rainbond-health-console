@@ -8,6 +8,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	storagev1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -265,6 +266,18 @@ func (c *KubernetesCollector) testStorageClass(storageClassName string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 
+	// Get storage class to check binding mode
+	sc, err := c.clientset.StorageV1().StorageClasses().Get(ctx, storageClassName, metav1.GetOptions{})
+	if err != nil {
+		log.Printf("Failed to get storage class %s: %v", storageClassName, err)
+		metrics.ClusterStorageUp.WithLabelValues(storageClassName).Set(0)
+		metrics.HealthCheckErrors.WithLabelValues("storage_class", "get_failed").Inc()
+		return
+	}
+
+	// Check if it's WaitForFirstConsumer binding mode
+	isWaitForFirstConsumer := sc.VolumeBindingMode != nil && *sc.VolumeBindingMode == storagev1.VolumeBindingWaitForFirstConsumer
+
 	// Generate unique test PVC name
 	testPVCName := fmt.Sprintf("health-check-test-%s-%d", storageClassName, time.Now().Unix())
 	namespace := "rbd-system" // Use rbd-system namespace for health checks
@@ -290,10 +303,14 @@ func (c *KubernetesCollector) testStorageClass(storageClassName string) {
 		},
 	}
 
-	log.Printf("Testing storage class %s by creating test PVC %s...", storageClassName, testPVCName)
+	if isWaitForFirstConsumer {
+		log.Printf("Testing storage class %s (WaitForFirstConsumer mode) by creating test PVC %s...", storageClassName, testPVCName)
+	} else {
+		log.Printf("Testing storage class %s by creating test PVC %s...", storageClassName, testPVCName)
+	}
 
 	// Create the test PVC
-	_, err := c.clientset.CoreV1().PersistentVolumeClaims(namespace).Create(ctx, pvc, metav1.CreateOptions{})
+	_, err = c.clientset.CoreV1().PersistentVolumeClaims(namespace).Create(ctx, pvc, metav1.CreateOptions{})
 	if err != nil {
 		log.Printf("Failed to create test PVC for storage class %s: %v", storageClassName, err)
 		metrics.ClusterStorageUp.WithLabelValues(storageClassName).Set(0)
@@ -315,7 +332,42 @@ func (c *KubernetesCollector) testStorageClass(storageClassName string) {
 		}
 	}()
 
-	// Wait for PVC to become Bound (with timeout)
+	// For WaitForFirstConsumer storage classes, just verify PVC was created successfully
+	// and is in Pending state (waiting for a Pod to consume it)
+	if isWaitForFirstConsumer {
+		// Wait a bit to ensure PVC status is updated
+		time.Sleep(2 * time.Second)
+
+		currentPVC, err := c.clientset.CoreV1().PersistentVolumeClaims(namespace).Get(ctx, testPVCName, metav1.GetOptions{})
+		if err != nil {
+			log.Printf("Failed to get test PVC %s status: %v", testPVCName, err)
+			metrics.ClusterStorageUp.WithLabelValues(storageClassName).Set(0)
+			metrics.HealthCheckErrors.WithLabelValues("storage_class", "pvc_get_failed").Inc()
+			return
+		}
+
+		// For WaitForFirstConsumer, Pending is the expected state
+		if currentPVC.Status.Phase == corev1.ClaimPending {
+			log.Printf("Test PVC %s is Pending (WaitForFirstConsumer), storage class %s is functional", testPVCName, storageClassName)
+			metrics.ClusterStorageUp.WithLabelValues(storageClassName).Set(1)
+			return
+		}
+
+		// If it somehow got bound (rare but possible), that's also good
+		if currentPVC.Status.Phase == corev1.ClaimBound {
+			log.Printf("Test PVC %s is Bound, storage class %s is functional", testPVCName, storageClassName)
+			metrics.ClusterStorageUp.WithLabelValues(storageClassName).Set(1)
+			return
+		}
+
+		// Any other state is problematic
+		log.Printf("Test PVC %s in unexpected state %s for WaitForFirstConsumer storage class", testPVCName, currentPVC.Status.Phase)
+		metrics.ClusterStorageUp.WithLabelValues(storageClassName).Set(0)
+		metrics.HealthCheckErrors.WithLabelValues("storage_class", "unexpected_state").Inc()
+		return
+	}
+
+	// For Immediate binding mode, wait for PVC to become Bound
 	log.Printf("Waiting for test PVC %s to become Bound...", testPVCName)
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
