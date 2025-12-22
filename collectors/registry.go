@@ -107,8 +107,9 @@ func (c *RegistryCollector) checkRegistry(regConfig config.RegistryConfig) {
 	// Create request
 	req, err := http.NewRequestWithContext(context.Background(), "GET", url, nil)
 	if err != nil {
-		log.Printf("Failed to create request for registry %s (%s): %v", regConfig.Name, regConfig.URL, err)
-		metrics.RegistryUp.WithLabelValues(regConfig.Name, regConfig.URL).Set(0)
+		errorReason := "请求创建失败"
+		log.Printf("Failed to create request for registry %s (%s): %v [reason: %s]", regConfig.Name, regConfig.URL, err, errorReason)
+		metrics.RegistryUp.WithLabelValues(regConfig.Name, regConfig.URL, errorReason).Set(0)
 		metrics.HealthCheckErrors.WithLabelValues("registry", "request_failed").Inc()
 		return
 	}
@@ -121,8 +122,9 @@ func (c *RegistryCollector) checkRegistry(regConfig config.RegistryConfig) {
 	// Perform request
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Printf("Registry %s (%s) is unreachable: %v", regConfig.Name, regConfig.URL, err)
-		metrics.RegistryUp.WithLabelValues(regConfig.Name, regConfig.URL).Set(0)
+		errorReason := classifyRegistryError(err)
+		log.Printf("Registry %s (%s) is unreachable: %v [reason: %s]", regConfig.Name, regConfig.URL, err, errorReason)
+		metrics.RegistryUp.WithLabelValues(regConfig.Name, regConfig.URL, errorReason).Set(0)
 		metrics.HealthCheckErrors.WithLabelValues("registry", "unreachable").Inc()
 		return
 	}
@@ -132,10 +134,126 @@ func (c *RegistryCollector) checkRegistry(regConfig config.RegistryConfig) {
 	// Docker Registry API v2 should return 200 or 401 (authentication required)
 	if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusUnauthorized {
 		log.Printf("Registry %s (%s) is healthy", regConfig.Name, regConfig.URL)
-		metrics.RegistryUp.WithLabelValues(regConfig.Name, regConfig.URL).Set(1)
+		metrics.RegistryUp.WithLabelValues(regConfig.Name, regConfig.URL, "正常").Set(1)
 	} else {
-		log.Printf("Registry %s (%s) returned unexpected status: %d", regConfig.Name, regConfig.URL, resp.StatusCode)
-		metrics.RegistryUp.WithLabelValues(regConfig.Name, regConfig.URL).Set(0)
+		errorReason := classifyHTTPStatus(resp.StatusCode)
+		log.Printf("Registry %s (%s) returned unexpected status: %d [reason: %s]", regConfig.Name, regConfig.URL, resp.StatusCode, errorReason)
+		metrics.RegistryUp.WithLabelValues(regConfig.Name, regConfig.URL, errorReason).Set(0)
 		metrics.HealthCheckErrors.WithLabelValues("registry", fmt.Sprintf("status_%d", resp.StatusCode)).Inc()
+	}
+}
+
+// classifyRegistryError classifies registry connection errors for better troubleshooting
+func classifyRegistryError(err error) string {
+	if err == nil {
+		return "正常"
+	}
+
+	errMsg := strings.ToLower(err.Error())
+
+	// TLS/Certificate errors
+	if strings.Contains(errMsg, "certificate signed by unknown authority") {
+		return "证书由未知CA签发"
+	}
+	if strings.Contains(errMsg, "certificate has expired") || strings.Contains(errMsg, "certificate is not valid") {
+		return "证书已过期"
+	}
+	if strings.Contains(errMsg, "certificate") || strings.Contains(errMsg, "tls") || strings.Contains(errMsg, "x509") {
+		return "TLS证书错误"
+	}
+
+	// Connection timeout
+	if strings.Contains(errMsg, "timeout") || strings.Contains(errMsg, "deadline exceeded") {
+		return "连接超时"
+	}
+
+	// Network errors
+	if strings.Contains(errMsg, "connection refused") {
+		return "连接被拒绝"
+	}
+	if strings.Contains(errMsg, "no route to host") || strings.Contains(errMsg, "network unreachable") {
+		return "网络不可达"
+	}
+	if strings.Contains(errMsg, "connection reset") {
+		return "连接被重置"
+	}
+
+	// DNS resolution errors
+	if strings.Contains(errMsg, "no such host") || strings.Contains(errMsg, "could not resolve") {
+		return "DNS解析失败"
+	}
+
+	// SSL protocol errors
+	if strings.Contains(errMsg, "ssl") {
+		return "SSL协议错误"
+	}
+
+	// EOF errors (connection closed)
+	if strings.Contains(errMsg, "eof") {
+		return "连接意外关闭"
+	}
+
+	// Generic connection error
+	if strings.Contains(errMsg, "connection") {
+		return "连接错误"
+	}
+
+	// Unknown error
+	return "未知错误"
+}
+
+// classifyHTTPStatus classifies HTTP status codes for better troubleshooting
+func classifyHTTPStatus(statusCode int) string {
+	switch statusCode {
+	// 2xx Success (should not reach here in error path)
+	case 200:
+		return "正常"
+	case 201:
+		return "已创建"
+	case 204:
+		return "无内容"
+
+	// 3xx Redirection
+	case 301, 302, 303, 307, 308:
+		return "重定向错误"
+
+	// 4xx Client Errors
+	case 400:
+		return "请求格式错误"
+	case 401:
+		return "需要认证" // Should not reach here as 401 is considered healthy
+	case 403:
+		return "访问被禁止"
+	case 404:
+		return "服务不存在"
+	case 405:
+		return "请求方法不允许"
+	case 408:
+		return "请求超时"
+	case 429:
+		return "请求过于频繁"
+
+	// 5xx Server Errors
+	case 500:
+		return "服务内部错误"
+	case 501:
+		return "功能未实现"
+	case 502:
+		return "后端服务不可达"
+	case 503:
+		return "服务不可用"
+	case 504:
+		return "后端服务超时"
+	case 505:
+		return "HTTP版本不支持"
+
+	// Unknown status code
+	default:
+		if statusCode >= 400 && statusCode < 500 {
+			return fmt.Sprintf("客户端错误%d", statusCode)
+		} else if statusCode >= 500 && statusCode < 600 {
+			return fmt.Sprintf("服务端错误%d", statusCode)
+		}
+		return fmt.Sprintf("未知状态码%d", statusCode)
 	}
 }

@@ -55,9 +55,6 @@ metadata:
 data:
   METRICS_PORT: "9090"
   COLLECT_INTERVAL: "30s"
-  GRDATA_PATH: "/grdata"
-  NODE_CPU_THRESHOLD: "80"
-  NODE_MEMORY_THRESHOLD: "80"
   IN_CLUSTER: "true"
 
 ---
@@ -164,17 +161,6 @@ spec:
           periodSeconds: 10
           timeoutSeconds: 5
           failureThreshold: 3
-        # 如果需要访问宿主机的 /grdata 目录，取消下面的注释
-        # volumeMounts:
-        # - name: grdata
-        #   mountPath: /grdata
-        #   readOnly: true
-      # 如果需要访问宿主机的 /grdata 目录，取消下面的注释
-      # volumes:
-      # - name: grdata
-      #   hostPath:
-      #     path: /grdata
-      #     type: DirectoryOrCreate
 
 ---
 # Service

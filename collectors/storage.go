@@ -3,6 +3,7 @@ package collectors
 import (
 	"context"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/minio/minio-go/v7"
@@ -83,8 +84,9 @@ func (c *StorageCollector) checkMinIO() {
 		Secure: c.minioConfig.UseSSL,
 	})
 	if err != nil {
-		log.Printf("Failed to create MinIO client: %v", err)
-		metrics.MinIOUp.Set(0)
+		errorReason := classifyMinIOError(err)
+		log.Printf("Failed to create MinIO client: %v [reason: %s]", err, errorReason)
+		metrics.MinIOUp.WithLabelValues(errorReason).Set(0)
 		metrics.HealthCheckErrors.WithLabelValues("minio", "client_creation_failed").Inc()
 		return
 	}
@@ -96,12 +98,69 @@ func (c *StorageCollector) checkMinIO() {
 	// Check if MinIO is online by listing buckets
 	_, err = minioClient.ListBuckets(ctx)
 	if err != nil {
-		log.Printf("MinIO is unreachable: %v", err)
-		metrics.MinIOUp.Set(0)
+		errorReason := classifyMinIOError(err)
+		log.Printf("MinIO is unreachable: %v [reason: %s]", err, errorReason)
+		metrics.MinIOUp.WithLabelValues(errorReason).Set(0)
 		metrics.HealthCheckErrors.WithLabelValues("minio", "unreachable").Inc()
 		return
 	}
 
 	log.Printf("MinIO is healthy")
-	metrics.MinIOUp.Set(1)
+	metrics.MinIOUp.WithLabelValues("正常").Set(1)
+}
+
+// classifyMinIOError classifies MinIO/S3 errors for better troubleshooting
+func classifyMinIOError(err error) string {
+	if err == nil {
+		return "正常"
+	}
+
+	errMsg := strings.ToLower(err.Error())
+
+	// Authentication errors
+	if strings.Contains(errMsg, "access denied") || strings.Contains(errMsg, "invalid access key") {
+		return "认证失败"
+	}
+	if strings.Contains(errMsg, "signature does not match") {
+		return "签名不匹配"
+	}
+
+	// Connection timeout
+	if strings.Contains(errMsg, "timeout") || strings.Contains(errMsg, "deadline exceeded") {
+		return "连接超时"
+	}
+
+	// Network errors
+	if strings.Contains(errMsg, "connection refused") {
+		return "连接被拒绝"
+	}
+	if strings.Contains(errMsg, "no route to host") || strings.Contains(errMsg, "network unreachable") {
+		return "网络不可达"
+	}
+	if strings.Contains(errMsg, "connection reset") {
+		return "连接被重置"
+	}
+
+	// DNS resolution errors
+	if strings.Contains(errMsg, "no such host") || strings.Contains(errMsg, "could not resolve") {
+		return "DNS解析失败"
+	}
+
+	// TLS/Certificate errors
+	if strings.Contains(errMsg, "certificate") || strings.Contains(errMsg, "tls") || strings.Contains(errMsg, "x509") {
+		return "TLS证书错误"
+	}
+
+	// Bucket errors
+	if strings.Contains(errMsg, "bucket") {
+		return "存储桶错误"
+	}
+
+	// Generic connection error
+	if strings.Contains(errMsg, "connection") {
+		return "连接错误"
+	}
+
+	// Unknown error
+	return "未知错误"
 }

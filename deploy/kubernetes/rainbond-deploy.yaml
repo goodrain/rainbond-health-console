@@ -12,9 +12,6 @@ metadata:
 data:
   METRICS_PORT: "9090"
   COLLECT_INTERVAL: "30s"
-  GRDATA_PATH: "/grdata"
-  NODE_CPU_THRESHOLD: "80"
-  NODE_MEMORY_THRESHOLD: "80"
   IN_CLUSTER: "true"
 
 ---
