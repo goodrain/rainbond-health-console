@@ -13,7 +13,7 @@ var MySQLUp = promauto.NewGaugeVec(
 		Name: "mysql_up",
 		Help: "MySQL database availability (1=up, 0=down)",
 	},
-	[]string{"instance", "host", "port", "error_reason"},
+	[]string{"instance", "host", "port"},
 )
 
 // KubernetesAPIServerUp indicates if Kubernetes API Server is reachable
@@ -22,7 +22,7 @@ var KubernetesAPIServerUp = promauto.NewGaugeVec(
 		Name: "kubernetes_apiserver_up",
 		Help: "Kubernetes API Server availability (1=up, 0=down)",
 	},
-	[]string{"error_reason"},
+	[]string{},
 )
 
 // CoreDNSUp indicates if CoreDNS is working properly
@@ -31,7 +31,7 @@ var CoreDNSUp = promauto.NewGaugeVec(
 		Name: "coredns_up",
 		Help: "CoreDNS availability (1=up, 0=down)",
 	},
-	[]string{"error_reason"},
+	[]string{},
 )
 
 // EtcdUp indicates if Etcd cluster is available
@@ -40,7 +40,7 @@ var EtcdUp = promauto.NewGaugeVec(
 		Name: "etcd_up",
 		Help: "Etcd cluster availability (1=up, 0=down)",
 	},
-	[]string{"error_reason"},
+	[]string{},
 )
 
 // ClusterStorageUp indicates if cluster storage is available
@@ -49,7 +49,7 @@ var ClusterStorageUp = promauto.NewGaugeVec(
 		Name: "cluster_storage_up",
 		Help: "Cluster storage class availability (1=up, 0=down)",
 	},
-	[]string{"storage_class", "error_reason"},
+	[]string{"storage_class"},
 )
 
 // RegistryUp indicates if container registry is reachable
@@ -58,7 +58,7 @@ var RegistryUp = promauto.NewGaugeVec(
 		Name: "registry_up",
 		Help: "Container registry availability (1=up, 0=down)",
 	},
-	[]string{"instance", "url", "error_reason"},
+	[]string{"instance", "url"},
 )
 
 // MinIOUp indicates if MinIO/S3 is reachable
@@ -67,7 +67,7 @@ var MinIOUp = promauto.NewGaugeVec(
 		Name: "minio_up",
 		Help: "MinIO/S3 availability (1=up, 0=down)",
 	},
-	[]string{"error_reason"},
+	[]string{},
 )
 
 // HealthCheckErrors tracks errors during health checks
