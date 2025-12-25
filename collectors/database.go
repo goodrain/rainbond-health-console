@@ -87,7 +87,7 @@ func (c *DatabaseCollector) checkDatabase(dbConfig config.DatabaseConfig) {
 	if err != nil {
 		errorReason := classifyDatabaseError(err)
 		log.Printf("Failed to open database connection for %s (%s:%d): %v [reason: %s]", dbConfig.Name, dbConfig.Host, dbConfig.Port, err, errorReason)
-		metrics.MySQLUp.WithLabelValues(dbConfig.Name, dbConfig.Host, fmt.Sprintf("%d", dbConfig.Port), errorReason).Set(0)
+		metrics.MySQLUp.WithLabelValues(dbConfig.Name, dbConfig.Host, fmt.Sprintf("%d", dbConfig.Port)).Set(0)
 		metrics.HealthCheckErrors.WithLabelValues("database", "connection_failed").Inc()
 		return
 	}
@@ -101,13 +101,13 @@ func (c *DatabaseCollector) checkDatabase(dbConfig config.DatabaseConfig) {
 	if err := db.PingContext(ctx); err != nil {
 		errorReason := classifyDatabaseError(err)
 		log.Printf("Database %s (%s:%d) is unreachable: %v [reason: %s]", dbConfig.Name, dbConfig.Host, dbConfig.Port, err, errorReason)
-		metrics.MySQLUp.WithLabelValues(dbConfig.Name, dbConfig.Host, fmt.Sprintf("%d", dbConfig.Port), errorReason).Set(0)
+		metrics.MySQLUp.WithLabelValues(dbConfig.Name, dbConfig.Host, fmt.Sprintf("%d", dbConfig.Port)).Set(0)
 		metrics.HealthCheckErrors.WithLabelValues("database", "ping_failed").Inc()
 		return
 	}
 
 	log.Printf("Database %s (%s:%d) is healthy", dbConfig.Name, dbConfig.Host, dbConfig.Port)
-	metrics.MySQLUp.WithLabelValues(dbConfig.Name, dbConfig.Host, fmt.Sprintf("%d", dbConfig.Port), "正常").Set(1)
+	metrics.MySQLUp.WithLabelValues(dbConfig.Name, dbConfig.Host, fmt.Sprintf("%d", dbConfig.Port)).Set(1)
 }
 
 // classifyDatabaseError classifies database errors for better troubleshooting

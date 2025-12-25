@@ -98,13 +98,13 @@ func (c *KubernetesCollector) checkAPIServer() {
 	if err != nil {
 		errorReason := classifyK8sError(err)
 		log.Printf("Kubernetes API Server is unreachable: %v [reason: %s]", err, errorReason)
-		metrics.KubernetesAPIServerUp.WithLabelValues(errorReason).Set(0)
+		metrics.KubernetesAPIServerUp.WithLabelValues().Set(0)
 		metrics.HealthCheckErrors.WithLabelValues("kubernetes_apiserver", "unreachable").Inc()
 		return
 	}
 
 	log.Printf("Kubernetes API Server is healthy")
-	metrics.KubernetesAPIServerUp.WithLabelValues("正常").Set(1)
+	metrics.KubernetesAPIServerUp.WithLabelValues().Set(1)
 }
 
 // checkCoreDNS checks if CoreDNS is working properly
@@ -124,14 +124,14 @@ func (c *KubernetesCollector) checkCoreDNS() {
 	if err != nil {
 		errorReason := classifyK8sError(err)
 		log.Printf("Failed to list CoreDNS pods: %v [reason: %s]", err, errorReason)
-		metrics.CoreDNSUp.WithLabelValues(errorReason).Set(0)
+		metrics.CoreDNSUp.WithLabelValues().Set(0)
 		metrics.HealthCheckErrors.WithLabelValues("coredns", "list_failed").Inc()
 		return
 	}
 
 	if len(pods.Items) == 0 {
 		log.Printf("No CoreDNS pods found")
-		metrics.CoreDNSUp.WithLabelValues("未找到Pod").Set(0)
+		metrics.CoreDNSUp.WithLabelValues().Set(0)
 		metrics.HealthCheckErrors.WithLabelValues("coredns", "no_pods").Inc()
 		return
 	}
@@ -154,7 +154,7 @@ func (c *KubernetesCollector) checkCoreDNS() {
 
 	if !hasReadyPod {
 		log.Printf("No ready CoreDNS pods found")
-		metrics.CoreDNSUp.WithLabelValues("无就绪Pod").Set(0)
+		metrics.CoreDNSUp.WithLabelValues().Set(0)
 		metrics.HealthCheckErrors.WithLabelValues("coredns", "no_ready_pods").Inc()
 		return
 	}
@@ -164,13 +164,13 @@ func (c *KubernetesCollector) checkCoreDNS() {
 	if err != nil {
 		errorReason := classifyDNSError(err)
 		log.Printf("DNS resolution test failed: %v [reason: %s]", err, errorReason)
-		metrics.CoreDNSUp.WithLabelValues(errorReason).Set(0)
+		metrics.CoreDNSUp.WithLabelValues().Set(0)
 		metrics.HealthCheckErrors.WithLabelValues("coredns", "resolution_failed").Inc()
 		return
 	}
 
 	log.Printf("CoreDNS is healthy")
-	metrics.CoreDNSUp.WithLabelValues("正常").Set(1)
+	metrics.CoreDNSUp.WithLabelValues().Set(1)
 }
 
 // checkEtcd checks if Etcd cluster is available
@@ -191,7 +191,7 @@ func (c *KubernetesCollector) checkEtcd() {
 	if err != nil {
 		errorReason := classifyK8sError(err)
 		log.Printf("Failed to list etcd pods: %v [reason: %s]", err, errorReason)
-		metrics.EtcdUp.WithLabelValues(errorReason).Set(0)
+		metrics.EtcdUp.WithLabelValues().Set(0)
 		metrics.HealthCheckErrors.WithLabelValues("etcd", "list_failed").Inc()
 		return
 	}
@@ -205,13 +205,13 @@ func (c *KubernetesCollector) checkEtcd() {
 		if err := result.Error(); err != nil {
 			errorReason := classifyK8sError(err)
 			log.Printf("Etcd health check via API Server failed: %v [reason: %s]", err, errorReason)
-			metrics.EtcdUp.WithLabelValues(errorReason).Set(0)
+			metrics.EtcdUp.WithLabelValues().Set(0)
 			metrics.HealthCheckErrors.WithLabelValues("etcd", "health_check_failed").Inc()
 			return
 		}
 
 		log.Printf("Etcd is healthy (verified via API Server)")
-		metrics.EtcdUp.WithLabelValues("正常").Set(1)
+		metrics.EtcdUp.WithLabelValues().Set(1)
 		return
 	}
 
@@ -226,13 +226,13 @@ func (c *KubernetesCollector) checkEtcd() {
 
 	if !hasRunningPod {
 		log.Printf("No running etcd pods found")
-		metrics.EtcdUp.WithLabelValues("无运行中Pod").Set(0)
+		metrics.EtcdUp.WithLabelValues().Set(0)
 		metrics.HealthCheckErrors.WithLabelValues("etcd", "no_running_pods").Inc()
 		return
 	}
 
 	log.Printf("Etcd is healthy")
-	metrics.EtcdUp.WithLabelValues("正常").Set(1)
+	metrics.EtcdUp.WithLabelValues().Set(1)
 }
 
 // checkStorageClasses checks if storage classes are available by creating test PVCs
@@ -250,14 +250,14 @@ func (c *KubernetesCollector) checkStorageClasses() {
 	if err != nil {
 		errorReason := classifyK8sError(err)
 		log.Printf("Failed to list storage classes: %v [reason: %s]", err, errorReason)
-		metrics.ClusterStorageUp.WithLabelValues("default", errorReason).Set(0)
+		metrics.ClusterStorageUp.WithLabelValues("default").Set(0)
 		metrics.HealthCheckErrors.WithLabelValues("storage_class", "list_failed").Inc()
 		return
 	}
 
 	if len(storageClasses.Items) == 0 {
 		log.Printf("No storage classes found")
-		metrics.ClusterStorageUp.WithLabelValues("default", "未找到存储类").Set(0)
+		metrics.ClusterStorageUp.WithLabelValues("default").Set(0)
 		metrics.HealthCheckErrors.WithLabelValues("storage_class", "no_storage_classes").Inc()
 		return
 	}
@@ -278,7 +278,7 @@ func (c *KubernetesCollector) testStorageClass(storageClassName string) {
 	if err != nil {
 		errorReason := classifyK8sError(err)
 		log.Printf("Failed to get storage class %s: %v [reason: %s]", storageClassName, err, errorReason)
-		metrics.ClusterStorageUp.WithLabelValues(storageClassName, errorReason).Set(0)
+		metrics.ClusterStorageUp.WithLabelValues(storageClassName).Set(0)
 		metrics.HealthCheckErrors.WithLabelValues("storage_class", "get_failed").Inc()
 		return
 	}
@@ -322,7 +322,7 @@ func (c *KubernetesCollector) testStorageClass(storageClassName string) {
 	if err != nil {
 		errorReason := classifyK8sError(err)
 		log.Printf("Failed to create test PVC for storage class %s: %v [reason: %s]", storageClassName, err, errorReason)
-		metrics.ClusterStorageUp.WithLabelValues(storageClassName, errorReason).Set(0)
+		metrics.ClusterStorageUp.WithLabelValues(storageClassName).Set(0)
 		metrics.HealthCheckErrors.WithLabelValues("storage_class", "pvc_create_failed").Inc()
 		return
 	}
@@ -351,7 +351,7 @@ func (c *KubernetesCollector) testStorageClass(storageClassName string) {
 		if err != nil {
 			errorReason := classifyK8sError(err)
 			log.Printf("Failed to get test PVC %s status: %v [reason: %s]", testPVCName, err, errorReason)
-			metrics.ClusterStorageUp.WithLabelValues(storageClassName, errorReason).Set(0)
+			metrics.ClusterStorageUp.WithLabelValues(storageClassName).Set(0)
 			metrics.HealthCheckErrors.WithLabelValues("storage_class", "pvc_get_failed").Inc()
 			return
 		}
@@ -359,21 +359,20 @@ func (c *KubernetesCollector) testStorageClass(storageClassName string) {
 		// For WaitForFirstConsumer, Pending is the expected state
 		if currentPVC.Status.Phase == corev1.ClaimPending {
 			log.Printf("Test PVC %s is Pending (WaitForFirstConsumer), storage class %s is functional", testPVCName, storageClassName)
-			metrics.ClusterStorageUp.WithLabelValues(storageClassName, "正常").Set(1)
+			metrics.ClusterStorageUp.WithLabelValues(storageClassName).Set(1)
 			return
 		}
 
 		// If it somehow got bound (rare but possible), that's also good
 		if currentPVC.Status.Phase == corev1.ClaimBound {
 			log.Printf("Test PVC %s is Bound, storage class %s is functional", testPVCName, storageClassName)
-			metrics.ClusterStorageUp.WithLabelValues(storageClassName, "正常").Set(1)
+			metrics.ClusterStorageUp.WithLabelValues(storageClassName).Set(1)
 			return
 		}
 
 		// Any other state is problematic
-		errorReason := fmt.Sprintf("PVC状态异常_%s", string(currentPVC.Status.Phase))
 		log.Printf("Test PVC %s in unexpected state %s for WaitForFirstConsumer storage class", testPVCName, currentPVC.Status.Phase)
-		metrics.ClusterStorageUp.WithLabelValues(storageClassName, errorReason).Set(0)
+		metrics.ClusterStorageUp.WithLabelValues(storageClassName).Set(0)
 		metrics.HealthCheckErrors.WithLabelValues("storage_class", "unexpected_state").Inc()
 		return
 	}
@@ -388,7 +387,7 @@ func (c *KubernetesCollector) testStorageClass(storageClassName string) {
 		select {
 		case <-timeout:
 			log.Printf("Timeout waiting for test PVC %s to bind (storage class %s may be slow or unavailable)", testPVCName, storageClassName)
-			metrics.ClusterStorageUp.WithLabelValues(storageClassName, "PVC绑定超时").Set(0)
+			metrics.ClusterStorageUp.WithLabelValues(storageClassName).Set(0)
 			metrics.HealthCheckErrors.WithLabelValues("storage_class", "pvc_bind_timeout").Inc()
 			return
 
@@ -403,14 +402,14 @@ func (c *KubernetesCollector) testStorageClass(storageClassName string) {
 			// Check if PVC is Bound
 			if currentPVC.Status.Phase == corev1.ClaimBound {
 				log.Printf("Test PVC %s successfully bound! Storage class %s is functional", testPVCName, storageClassName)
-				metrics.ClusterStorageUp.WithLabelValues(storageClassName, "正常").Set(1)
+				metrics.ClusterStorageUp.WithLabelValues(storageClassName).Set(1)
 				return
 			}
 
 			// Check if PVC is in a failed state
 			if currentPVC.Status.Phase == corev1.ClaimLost {
 				log.Printf("Test PVC %s is in Lost state, storage class %s may have issues", testPVCName, storageClassName)
-				metrics.ClusterStorageUp.WithLabelValues(storageClassName, "PVC丢失").Set(0)
+				metrics.ClusterStorageUp.WithLabelValues(storageClassName).Set(0)
 				metrics.HealthCheckErrors.WithLabelValues("storage_class", "pvc_lost").Inc()
 				return
 			}
@@ -420,7 +419,7 @@ func (c *KubernetesCollector) testStorageClass(storageClassName string) {
 
 		case <-ctx.Done():
 			log.Printf("Context cancelled while testing storage class %s", storageClassName)
-			metrics.ClusterStorageUp.WithLabelValues(storageClassName, "上下文已取消").Set(0)
+			metrics.ClusterStorageUp.WithLabelValues(storageClassName).Set(0)
 			metrics.HealthCheckErrors.WithLabelValues("storage_class", "context_cancelled").Inc()
 			return
 		}

@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/rainbond/health-console/config"
@@ -16,23 +15,20 @@ import (
 
 // RegistryCollector monitors container registry health
 type RegistryCollector struct {
-	registries       []config.RegistryConfig
-	interval         time.Duration
-	ctx              context.Context
-	cancel           context.CancelFunc
-	lastErrorReasons map[string]string // 跟踪每个 registry 上一次的 error_reason
-	mu               sync.Mutex        // 保护 lastErrorReasons 的并发访问
+	registries []config.RegistryConfig
+	interval   time.Duration
+	ctx        context.Context
+	cancel     context.CancelFunc
 }
 
 // NewRegistryCollector creates a new registry collector
 func NewRegistryCollector(cfg *config.Config) *RegistryCollector {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &RegistryCollector{
-		registries:       cfg.Registries,
-		interval:         cfg.CollectInterval,
-		ctx:              ctx,
-		cancel:           cancel,
-		lastErrorReasons: make(map[string]string),
+		registries: cfg.Registries,
+		interval:   cfg.CollectInterval,
+		ctx:        ctx,
+		cancel:     cancel,
 	}
 }
 
@@ -71,25 +67,9 @@ func (c *RegistryCollector) collect() {
 	}
 }
 
-// setRegistryMetric 更新 registry_up 指标，并删除旧的 error_reason 标签组合
-func (c *RegistryCollector) setRegistryMetric(name, url, errorReason string, value float64) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	// 生成唯一的 key
-	key := name + "|" + url
-
-	// 如果之前有不同的 error_reason，删除旧的时间序列
-	if lastReason, exists := c.lastErrorReasons[key]; exists && lastReason != errorReason {
-		metrics.RegistryUp.DeleteLabelValues(name, url, lastReason)
-		log.Printf("Deleted old metric: registry_up{instance=%s, url=%s, error_reason=%s}", name, url, lastReason)
-	}
-
-	// 设置新值
-	metrics.RegistryUp.WithLabelValues(name, url, errorReason).Set(value)
-
-	// 更新跟踪记录
-	c.lastErrorReasons[key] = errorReason
+// setRegistryMetric 更新 registry_up 指标
+func (c *RegistryCollector) setRegistryMetric(name, url string, value float64) {
+	metrics.RegistryUp.WithLabelValues(name, url).Set(value)
 }
 
 // checkRegistry checks a single registry instance
@@ -134,7 +114,7 @@ func (c *RegistryCollector) checkRegistry(regConfig config.RegistryConfig) {
 	if err != nil {
 		errorReason := "请求创建失败"
 		log.Printf("Failed to create request for registry %s (%s): %v [reason: %s]", regConfig.Name, regConfig.URL, err, errorReason)
-		c.setRegistryMetric(regConfig.Name, regConfig.URL, errorReason, 0)
+		c.setRegistryMetric(regConfig.Name, regConfig.URL, 0)
 		metrics.HealthCheckErrors.WithLabelValues("registry", "request_failed").Inc()
 		return
 	}
@@ -149,7 +129,7 @@ func (c *RegistryCollector) checkRegistry(regConfig config.RegistryConfig) {
 	if err != nil {
 		errorReason := classifyRegistryError(err)
 		log.Printf("Registry %s (%s) is unreachable: %v [reason: %s]", regConfig.Name, regConfig.URL, err, errorReason)
-		c.setRegistryMetric(regConfig.Name, regConfig.URL, errorReason, 0)
+		c.setRegistryMetric(regConfig.Name, regConfig.URL, 0)
 		metrics.HealthCheckErrors.WithLabelValues("registry", "unreachable").Inc()
 		return
 	}
@@ -159,11 +139,11 @@ func (c *RegistryCollector) checkRegistry(regConfig config.RegistryConfig) {
 	// Docker Registry API v2 should return 200 or 401 (authentication required)
 	if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusUnauthorized {
 		log.Printf("Registry %s (%s) is healthy", regConfig.Name, regConfig.URL)
-		c.setRegistryMetric(regConfig.Name, regConfig.URL, "正常", 1)
+		c.setRegistryMetric(regConfig.Name, regConfig.URL, 1)
 	} else {
 		errorReason := classifyHTTPStatus(resp.StatusCode)
 		log.Printf("Registry %s (%s) returned unexpected status: %d [reason: %s]", regConfig.Name, regConfig.URL, resp.StatusCode, errorReason)
-		c.setRegistryMetric(regConfig.Name, regConfig.URL, errorReason, 0)
+		c.setRegistryMetric(regConfig.Name, regConfig.URL, 0)
 		metrics.HealthCheckErrors.WithLabelValues("registry", fmt.Sprintf("status_%d", resp.StatusCode)).Inc()
 	}
 }

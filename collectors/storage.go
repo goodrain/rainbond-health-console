@@ -86,7 +86,7 @@ func (c *StorageCollector) checkMinIO() {
 	if err != nil {
 		errorReason := classifyMinIOError(err)
 		log.Printf("Failed to create MinIO client: %v [reason: %s]", err, errorReason)
-		metrics.MinIOUp.WithLabelValues(errorReason).Set(0)
+		metrics.MinIOUp.WithLabelValues().Set(0)
 		metrics.HealthCheckErrors.WithLabelValues("minio", "client_creation_failed").Inc()
 		return
 	}
@@ -100,13 +100,13 @@ func (c *StorageCollector) checkMinIO() {
 	if err != nil {
 		errorReason := classifyMinIOError(err)
 		log.Printf("MinIO is unreachable: %v [reason: %s]", err, errorReason)
-		metrics.MinIOUp.WithLabelValues(errorReason).Set(0)
+		metrics.MinIOUp.WithLabelValues().Set(0)
 		metrics.HealthCheckErrors.WithLabelValues("minio", "unreachable").Inc()
 		return
 	}
 
 	log.Printf("MinIO is healthy")
-	metrics.MinIOUp.WithLabelValues("正常").Set(1)
+	metrics.MinIOUp.WithLabelValues().Set(1)
 }
 
 // classifyMinIOError classifies MinIO/S3 errors for better troubleshooting
